@@ -42,7 +42,7 @@ pub fn new_issue(
                 .replace("{base_url}", &conf.base_url)
                 .replace("{repo}", &conf.repo),
         )
-        .header("authorization", &conf.auth_token)
+        .header("Authorization", format!("token {}", &conf.auth_token))
         .json(&issue)
         .send()
         .unwrap()
@@ -109,7 +109,7 @@ pub fn new_reply(
                 .replace("{repo}", &conf.repo)
                 .replace("{index}", &results[0].0.to_string()),
         )
-        .header("authorization", &conf.auth_token)
+        .header("Authorization", format!("token {}", &conf.auth_token))
         .json(&CreateIssueCommentOption {
             body: format!(
                 "{} replies:\n\n{}",
@@ -164,7 +164,7 @@ pub fn close(conn: &Connection, password: Password, conf: &Config) -> Result<(St
                 .replace("{repo}", &conf.repo),
             &results[0].0.to_string()
         ))
-        .header("authorization", &conf.auth_token)
+        .header("Authorization", format!("token {}", &conf.auth_token))
         .json(&EditIssueOption {
             state: "closed".to_string(),
         })
@@ -236,7 +236,7 @@ pub fn comments(
                 .replace("{repo}", &conf.repo)
                 .replace("{index}", &id.to_string()),
         )
-        .header("authorization", &conf.auth_token)
+        .header("Authorization", format!("token {}", &conf.auth_token))
         .query(&[("since", since)])
         .send()
         .unwrap()
