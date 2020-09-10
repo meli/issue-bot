@@ -1,92 +1,32 @@
-use std::borrow::Cow;
-use std::error::Error;
-use std::fmt;
-use std::io;
-use std::result;
-use std::str;
-use std::string;
+/* This file is part of issue-bot.
+ *
+ * issue-bot is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * issue-bot is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with issue-bot.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
-pub type Result<T> = result::Result<T, IssueError>;
-
-#[derive(Debug, Clone)]
-pub struct IssueError {
-    details: String,
+error_chain! {
+    foreign_links {
+        Io(std::io::Error);
+        Reqwest(reqwest::Error);
+        Database(rusqlite::Error);
+        Unicode(std::str::Utf8Error);
+        UnicodeS(std::string::FromUtf8Error);
+        Email(melib::error::MeliError);
+   }
 }
 
-impl IssueError {
-    pub fn new<M>(msg: M) -> IssueError
-    where
-        M: Into<String>,
-    {
-        IssueError {
-            details: msg.into(),
-        }
-    }
-}
-
-impl fmt::Display for IssueError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.details)
-    }
-}
-
-impl Into<String> for IssueError {
-    fn into(self) -> String {
-        self.details
-    }
-}
-
-impl Error for IssueError {
-    fn description(&self) -> &str {
-        &self.details
-    }
-}
-
-impl From<io::Error> for IssueError {
-    #[inline]
-    fn from(kind: io::Error) -> IssueError {
-        IssueError::new(kind.description())
-    }
-}
-
-impl Into<io::Error> for IssueError {
-    #[inline]
-    fn into(self) -> io::Error {
-        io::Error::new(io::ErrorKind::Other, self.description())
-    }
-}
-
-impl<'a> From<Cow<'a, str>> for IssueError {
-    #[inline]
-    fn from(kind: Cow<'_, str>) -> IssueError {
-        IssueError::new(format!("{:?}", kind))
-    }
-}
-
-impl From<string::FromUtf8Error> for IssueError {
-    #[inline]
-    fn from(kind: string::FromUtf8Error) -> IssueError {
-        IssueError::new(format!("{:?}", kind))
-    }
-}
-
-impl From<str::Utf8Error> for IssueError {
-    #[inline]
-    fn from(kind: str::Utf8Error) -> IssueError {
-        IssueError::new(format!("{:?}", kind))
-    }
-}
-
-impl From<rusqlite::Error> for IssueError {
-    #[inline]
-    fn from(kind: rusqlite::Error) -> IssueError {
-        IssueError::new(format!("{}", kind.to_string()))
-    }
-}
-
-impl From<reqwest::Error> for IssueError {
-    #[inline]
-    fn from(kind: reqwest::Error) -> IssueError {
-        IssueError::new(format!("{}", kind.to_string()))
+impl Error {
+    pub fn new<S: Into<String>>(msg: S) -> Self {
+        msg.into().into()
     }
 }

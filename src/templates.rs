@@ -1,8 +1,24 @@
+/* This file is part of issue-bot.
+ *
+ * issue-bot is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * issue-bot is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with issue-bot.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 use super::*;
 
 static BASE_ISSUE_URL: &'static str = "{base_url}/{repo}/issues";
 
-pub fn new_issue_failure(e: IssueError, conf: &Config) -> String {
+pub fn new_issue_failure(e: Error, conf: &Configuration) -> String {
     format!("Hello,
 
 Unfortunately we were not able to create your issue. The reason was: `{}`. Please contact the repository's owners for assistance.
@@ -14,7 +30,7 @@ pub fn new_issue_success(
     title: String,
     password: Password,
     issue_id: i64,
-    conf: &Config,
+    conf: &Configuration,
 ) -> String {
     format!("Hello,
 
@@ -33,7 +49,7 @@ Please keep this email in order to be able to keep in touch with your issue.
 This is an automated email from {bot_name} <{local_part}+help@{domain}>", title = title, password = password.to_string(), issue_id = issue_id, url = BASE_ISSUE_URL.replace("{base_url}", &conf.base_url).replace("{repo}", &conf.repo), local_part = &conf.local_part, domain = &conf.domain, bot_name = &conf.bot_name)
 }
 
-pub fn new_reply_failure(e: IssueError, conf: &Config) -> String {
+pub fn new_reply_failure(e: Error, conf: &Configuration) -> String {
     format!("Hello,
 
 Unfortunately we were not able to post your reply. The reason was: `{}`. Please contact the repository's owners for assistance.
@@ -46,7 +62,7 @@ pub fn new_reply_success(
     password: Password,
     issue_id: i64,
     is_subscribed: bool,
-    conf: &Config,
+    conf: &Configuration,
 ) -> String {
     if is_subscribed {
         format!("Hello,
@@ -83,7 +99,7 @@ This is an automated email from {bot_name} <{local_part}+help@{domain}>", title 
     }
 }
 
-pub fn close_success(title: String, issue_id: i64, conf: &Config) -> String {
+pub fn close_success(title: String, issue_id: i64, conf: &Configuration) -> String {
     format!(
         "Hello,
 
@@ -103,7 +119,7 @@ This is an automated email from {bot_name} <{local_part}+help@{domain}>",
     )
 }
 
-pub fn close_failure(e: IssueError, conf: &Config) -> String {
+pub fn close_failure(e: Error, conf: &Configuration) -> String {
     format!("Hello,
 
 Unfortunately we were not able to close this issue. The reason was: `{}`. Please contact the repository's owners for assistance.
@@ -111,7 +127,7 @@ Unfortunately we were not able to close this issue. The reason was: `{}`. Please
 This is an automated email from {bot_name} <{local_part}+help@{domain}>",  e.to_string(), local_part = &conf.local_part, domain = &conf.domain, bot_name = &conf.bot_name)
 }
 
-pub fn invalid_request(conf: &Config) -> String {
+pub fn invalid_request(conf: &Configuration) -> String {
     format!(
         "Hello,
 
@@ -138,7 +154,7 @@ pub fn change_subscription_success(
     password: Password,
     issue_id: i64,
     is_subscribed: bool,
-    conf: &Config,
+    conf: &Configuration,
 ) -> String {
     format!("Hello,
 
@@ -157,7 +173,7 @@ Please keep this email in order to be able to keep in touch with your issue.
 This is an automated email from {bot_name} <{local_part}+help@{domain}>", title = title, password = password.to_string(), issue_id = issue_id, url = BASE_ISSUE_URL.replace("{base_url}", &conf.base_url).replace("{repo}", &conf.repo), local_part = &conf.local_part, domain = &conf.domain, bot_name = &conf.bot_name, not = if is_subscribed { "" }else {"not "}, un = if is_subscribed { "un" } else { "" } )
 }
 
-pub fn change_subscription_failure(is_subscribed: bool, conf: &Config) -> String {
+pub fn change_subscription_failure(is_subscribed: bool, conf: &Configuration) -> String {
     format!(
         "Hello,
 
@@ -171,7 +187,7 @@ This is an automated email from {bot_name} <{local_part}+help@{domain}>",
     )
 }
 
-pub fn reply_update(issue: &Issue, conf: &Config, comments: Vec<String>) -> String {
+pub fn reply_update(issue: &Issue, conf: &Configuration, comments: Vec<String>) -> String {
     assert!(comments.len() > 0);
     format!(
         "Hello,

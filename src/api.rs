@@ -1,3 +1,19 @@
+/* This file is part of issue-bot.
+ *
+ * issue-bot is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * issue-bot is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with issue-bot.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 use super::*;
 
 static ISSUES_BASE_URL: &'static str = "{base_url}/api/v1/repos/{repo}/issues";
@@ -20,7 +36,7 @@ pub fn new_issue(
     body: String,
     anonymous: bool,
     submitter: Address,
-    conf: &Config,
+    conf: &Configuration,
 ) -> Result<(Password, i64)> {
     let issue = CreateIssueOption {
         title,
@@ -88,7 +104,7 @@ pub fn new_reply(
     body: String,
     password: Password,
     submitter: Address,
-    conf: &Config,
+    conf: &Configuration,
 ) -> Result<(String, i64, bool)> {
     let mut stmt =
         conn.prepare("SELECT id, title, subscribed, anonymous FROM issue WHERE password = ?")?;
@@ -99,7 +115,7 @@ pub fn new_reply(
         .map(|r| r.unwrap())
         .collect::<Vec<(i64, String, bool, bool)>>();
     if results.is_empty() {
-        return Err(IssueError::new("Not found".to_string()));
+        return Err(Error::new("Not found".to_string()));
     }
     let client = reqwest::Client::new();
     let response = client
@@ -133,7 +149,7 @@ pub fn new_reply(
             submitter.to_string(),
             body
         );
-        Err(IssueError::new(
+        Err(Error::new(
             "You can not reply to this issue due to an internal error.",
         ))
     }
@@ -144,7 +160,11 @@ struct EditIssueOption {
     state: String,
 }
 
-pub fn close(conn: &Connection, password: Password, conf: &Config) -> Result<(String, i64, bool)> {
+pub fn close(
+    conn: &Connection,
+    password: Password,
+    conf: &Configuration,
+) -> Result<(String, i64, bool)> {
     let mut stmt = conn.prepare("SELECT id, title, subscribed FROM issue WHERE password = ?")?;
     let mut results = stmt
         .query_map(&[password.as_bytes().to_vec()], |row| {
@@ -153,7 +173,7 @@ pub fn close(conn: &Connection, password: Password, conf: &Config) -> Result<(St
         .map(|r| r.unwrap())
         .collect::<Vec<(i64, String, bool)>>();
     if results.is_empty() {
-        return Err(IssueError::new("Not found".to_string()));
+        return Err(Error::new("Not found".to_string()));
     }
     let client = reqwest::Client::new();
     let res = client
@@ -177,7 +197,7 @@ pub fn close(conn: &Connection, password: Password, conf: &Config) -> Result<(St
         Ok((title, issue_id, is_subscribed))
     } else {
         eprintln!("Issue could not be closed: {:#?}", map);
-        Err(IssueError::new(
+        Err(Error::new(
             "Issue cannot be closed due to an internal error.",
         ))
     }
@@ -196,16 +216,16 @@ pub fn change_subscription(
         .map(|r| r.unwrap())
         .collect::<Vec<(i64, String, bool)>>();
     if results.is_empty() {
-        return Err(IssueError::new("Issue not found".to_string()));
+        return Err(Error::new("Issue not found".to_string()));
     }
     let (issue_id, title, is_subscribed) = results.remove(0);
     if !is_subscribed && !new_val {
-        return Err(IssueError::new(format!(
+        return Err(Error::new(format!(
             "You are not subscribed to issue `{}`",
             &title
         )));
     } else if is_subscribed && new_val {
-        return Err(IssueError::new(format!(
+        return Err(Error::new(format!(
             "You are already subscribed to issue `{}`",
             &title
         )));
@@ -226,7 +246,7 @@ pub fn change_subscription(
 pub fn comments(
     id: i64,
     since: &str,
-    conf: &Config,
+    conf: &Configuration,
 ) -> Vec<serde_json::map::Map<String, serde_json::Value>> {
     let client = reqwest::Client::new();
     let result = client
