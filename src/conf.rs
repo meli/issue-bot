@@ -17,25 +17,29 @@
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct Configuration {
-    /** eg. meli-issues becomes [meli-issues] **/
+    /// eg. meli-issues becomes [meli-issues]
     pub tag: String,
-    /** your bot's authentication token from Gitea's Swagger **/
+    /// your bot's authentication token from Gitea's Swagger
     pub auth_token: String,
-    /** eg. for issues@meli.delivery the local part is issues **/
+    /// eg. for issues@meli.delivery the local part is issues
     pub local_part: String,
-    /** eg. for issues@meli.delivery the domain is meli.delivery **/
+    /// eg. for issues@meli.delivery the domain is meli.delivery
     pub domain: String,
-    /** eg. "https://git.meli.delivery" **/
+    /// eg. "https://git.meli.delivery"
     pub base_url: String,
-    /** eg. "meli/meli" **/
+    /// eg. "meli/meli"
     pub repo: String,
-    /** The bot's name that will be displayed in signatures of sent replies **/
+    /// The bot's name that will be displayed in signatures of sent replies
     pub bot_name: String,
-    /** The bot's login username **/
+    /// The bot's login username
     pub bot_username: String,
-    /** the command to pipe an email to **/
+    /// the command to pipe an email to
     pub mailer: String,
-    /** file to write logs **/
+    /// file to write logs
     pub log_file: String,
+    /// don't actually email anything
+    #[serde(default)]
+    pub dry_run: bool,
 }

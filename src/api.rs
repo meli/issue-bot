@@ -16,8 +16,22 @@
 
 use super::*;
 
-static ISSUES_BASE_URL: &'static str = "{base_url}/api/v1/repos/{repo}/issues";
-static ISSUES_COMMENTS_URL: &'static str = "{base_url}/api/v1/repos/{repo}/issues/{index}/comments";
+#[macro_export]
+macro_rules! gitea_api_mismatch {
+    ($map:ident[$value:literal].$conv_method:ident()) => {{
+        $map[$value].$conv_method().ok_or_else(|| {
+            log::error!(
+                "issue API response missing valid {} field: {:?}",
+                $value,
+                $map
+            );
+            Error::new("Gitea API response or API version not matching what was expected.")
+        })?
+    }};
+}
+
+static ISSUES_BASE_URL: &str = "{base_url}/api/v1/repos/{repo}/issues";
+static ISSUES_COMMENTS_URL: &str = "{base_url}/api/v1/repos/{repo}/issues/{index}/comments";
 
 use serde::Serialize;
 
@@ -51,7 +65,7 @@ pub fn new_issue(
         ),
         ..CreateIssueOption::default()
     };
-    let client = reqwest::Client::new();
+    let client = reqwest::blocking::Client::new();
     let res = client
         .post(
             &ISSUES_BASE_URL
@@ -60,21 +74,19 @@ pub fn new_issue(
         )
         .header("Authorization", format!("token {}", &conf.auth_token))
         .json(&issue)
-        .send()
-        .unwrap()
-        .text()
-        .unwrap();
+        .send()?
+        .text()?;
 
-    let map: serde_json::map::Map<String, serde_json::Value> = serde_json::from_str(&res).unwrap();
+    let map: serde_json::map::Map<String, serde_json::Value> = serde_json::from_str(&res)?;
     let issue = Issue {
-        id: map["number"].as_i64().unwrap(),
+        id: gitea_api_mismatch!(map["number"].as_i64()),
         submitter,
         password: Uuid::new_v4(),
-        time_created: time::get_time(),
+        time_created: chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         anonymous,
         subscribed: true,
         title: issue.title,
-        last_update: map["created_at"].to_string(),
+        last_update: gitea_api_mismatch!(map["created_at"].as_str()).to_string(),
     };
     conn.execute(
         "INSERT INTO issue (id, submitter, password, time_created, anonymous, subscribed, title, last_update)
@@ -89,8 +101,7 @@ pub fn new_issue(
             &issue.title,
             &issue.last_update,
         ],
-    )
-    .unwrap();
+    )?;
     Ok((issue.password, issue.id))
 }
 
@@ -109,15 +120,14 @@ pub fn new_reply(
     let mut stmt =
         conn.prepare("SELECT id, title, subscribed, anonymous FROM issue WHERE password = ?")?;
     let mut results = stmt
-        .query_map(&[password.as_bytes().to_vec()], |row| {
+        .query_map([password.as_bytes().to_vec()], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
         })?
-        .map(|r| r.unwrap())
-        .collect::<Vec<(i64, String, bool, bool)>>();
+        .collect::<std::result::Result<Vec<(i64, String, bool, bool)>, _>>()?;
     if results.is_empty() {
         return Err(Error::new("Not found".to_string()));
     }
-    let client = reqwest::Client::new();
+    let client = reqwest::blocking::Client::new();
     let response = client
         .post(
             &ISSUES_COMMENTS_URL
@@ -145,8 +155,8 @@ pub fn new_reply(
         eprintln!(
             "New reply could not be created: {:?}\npassword: {}\nsubmitter: {}\nbody: {}",
             response.status(),
-            password.to_string(),
-            submitter.to_string(),
+            password,
+            submitter,
             body
         );
         Err(Error::new(
@@ -167,15 +177,14 @@ pub fn close(
 ) -> Result<(String, i64, bool)> {
     let mut stmt = conn.prepare("SELECT id, title, subscribed FROM issue WHERE password = ?")?;
     let mut results = stmt
-        .query_map(&[password.as_bytes().to_vec()], |row| {
+        .query_map([password.as_bytes().to_vec()], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?))
         })?
-        .map(|r| r.unwrap())
-        .collect::<Vec<(i64, String, bool)>>();
+        .collect::<std::result::Result<Vec<(i64, String, bool)>, _>>()?;
     if results.is_empty() {
         return Err(Error::new("Not found".to_string()));
     }
-    let client = reqwest::Client::new();
+    let client = reqwest::blocking::Client::new();
     let res = client
         .patch(&format!(
             "{}/{}",
@@ -191,7 +200,7 @@ pub fn close(
         .send()?
         .text()?;
 
-    let map: serde_json::map::Map<String, serde_json::Value> = serde_json::from_str(&res).unwrap();
+    let map: serde_json::map::Map<String, serde_json::Value> = serde_json::from_str(&res)?;
     if map["state"] == "closed" {
         let (issue_id, title, is_subscribed) = results.remove(0);
         Ok((title, issue_id, is_subscribed))
@@ -209,12 +218,11 @@ pub fn change_subscription(
     new_val: bool,
 ) -> Result<(String, i64, bool)> {
     let mut stmt = conn.prepare("SELECT id, title, subscribed FROM issue WHERE password = ?")?;
-    let mut results = stmt
-        .query_map(&[password.as_bytes().to_vec()], |row| {
+    let mut results: Vec<(i64, String, bool)> = stmt
+        .query_map([password.as_bytes().to_vec()], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?))
         })?
-        .map(|r| r.unwrap())
-        .collect::<Vec<(i64, String, bool)>>();
+        .collect::<std::result::Result<Vec<(i64, String, bool)>, _>>()?;
     if results.is_empty() {
         return Err(Error::new("Issue not found".to_string()));
     }
@@ -234,10 +242,10 @@ pub fn change_subscription(
     let mut stmt =
         conn.prepare("UPDATE issue SET subscribed = (:subscribed) WHERE password = (:password)")?;
     assert_eq!(
-        stmt.execute_named(&[
-            (":subscribed", &new_val),
-            (":password", &password.as_bytes().to_vec())
-        ])?,
+        stmt.execute(rusqlite::named_params! {
+            ":subscribed": &new_val,
+            ":password": &password.as_bytes().to_vec()
+        })?,
         1
     );
     Ok((title, issue_id, is_subscribed))
@@ -247,8 +255,8 @@ pub fn comments(
     id: i64,
     since: &str,
     conf: &Configuration,
-) -> Vec<serde_json::map::Map<String, serde_json::Value>> {
-    let client = reqwest::Client::new();
+) -> Result<Vec<serde_json::map::Map<String, serde_json::Value>>> {
+    let client = reqwest::blocking::Client::new();
     let result = client
         .get(
             &ISSUES_COMMENTS_URL
@@ -256,12 +264,9 @@ pub fn comments(
                 .replace("{repo}", &conf.repo)
                 .replace("{index}", &id.to_string()),
         )
-        .header("Authorization", format!("token {}", &conf.auth_token))
         .query(&[("since", since)])
-        .send()
-        .unwrap()
-        .text()
-        .unwrap();
-    let result: Vec<_> = serde_json::from_str(&result).unwrap();
-    result
+        .send()?
+        .text()?;
+    let result: Vec<_> = serde_json::from_str(&result)?;
+    Ok(result)
 }

@@ -24,11 +24,10 @@ use log::{error, info, trace};
 use melib::email::headers::HeaderName;
 use melib::{Address, Envelope};
 use rusqlite::types::ToSql;
-use rusqlite::{Connection, NO_PARAMS};
+use rusqlite::Connection;
 use simplelog::*;
 use std::fs::File;
 use std::io::{stdin, Read};
-use time::Timespec;
 use uuid::Uuid;
 
 mod error;
@@ -40,48 +39,51 @@ mod cron;
 mod templates;
 
 type Password = Uuid;
-static PASSWORD_COMMANDS: &'static [&'static str] = &["reply", "unsubscribe", "subscribe", "close"];
+static PASSWORD_COMMANDS: &[&str] = &["reply", "unsubscribe", "subscribe", "close"];
 
 #[derive(Debug)]
 pub struct Issue {
     id: i64,
     submitter: Address,
     password: Password,
-    time_created: Timespec,
+    time_created: String, // chrono::naive::NaiveDateTime,
     anonymous: bool,
     subscribed: bool,
     title: String,
-    last_update: String,
+    last_update: String, // chrono::DateTime<chrono::FixedOffset>,
 }
 
-pub fn send_mail(d: melib::email::Draft, conf: &Configuration) {
+pub fn send_mail(d: melib::email::Draft, conf: &Configuration) -> Result<()> {
     use std::io::Write;
     use std::process::Stdio;
     let parts = conf.mailer.split_whitespace().collect::<Vec<&str>>();
     let (cmd, args) = (parts[0], &parts[1..]);
+    if conf.dry_run {
+        eprintln!("DRY_RUN: NOT sending to the following email:\n{:?}\n", &d);
+        return Ok(());
+    }
     let mut mailer = std::process::Command::new(cmd)
         .args(args)
         .stdin(Stdio::piped())
-        .stdout(Stdio::inherit())
-        .spawn()
-        .expect("Failed to start mailer command");
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
     {
         let stdin = mailer.stdin.as_mut().expect("failed to open stdin");
-        let draft = d.finalise().unwrap();
-        stdin
-            .write_all(draft.as_bytes())
-            .expect("Failed to write to stdin");
+        let draft = d.finalise()?;
+        stdin.write_all(draft.as_bytes())?;
     }
-    let output = mailer.wait().expect("Failed to wait on mailer");
+    let output = mailer.wait()?;
     if !output.success() {
         // TODO: commit to database queue
         error!("mailer fail");
         eprintln!("mailer fail");
-        std::process::exit(1);
+        return Err(Error::new(format!("Mailer failed. {:?}", output)));
     }
+    Ok(())
 }
 
-fn run_app(conn: Connection, conf: Configuration) -> Result<()> {
+fn run_request(conn: Connection, conf: Configuration) -> Result<()> {
     let mut new_message_raw = vec![];
     stdin().lock().read_to_end(&mut new_message_raw)?;
 
@@ -103,7 +105,7 @@ fn run_app(conn: Connection, conf: Configuration) -> Result<()> {
 
     let tags: Vec<String> = envelope.to()[0].get_tags('+');
     match tags.as_slice() {
-        s if s.is_empty() || s == &["anonymous"] => {
+        s if s.is_empty() || s == ["anonymous"] => {
             /* Assign new issue */
             let subject = envelope.subject().to_string();
             let body = envelope.body_bytes(new_message_raw.as_slice()).text();
@@ -133,7 +135,7 @@ fn run_app(conn: Connection, conf: Configuration) -> Result<()> {
                     reply.set_body(templates::new_issue_success(
                         subject, password, issue_id, &conf,
                     ));
-                    send_mail(reply, &conf);
+                    send_mail(reply, &conf)?;
                 }
                 Err(err) => {
                     error!("Issue {} could not be created {}.", &subject, &err);
@@ -146,7 +148,7 @@ fn run_app(conn: Connection, conf: Configuration) -> Result<()> {
                         ),
                     );
                     reply.set_body(templates::new_issue_failure(err, &conf));
-                    send_mail(reply, &conf);
+                    send_mail(reply, &conf)?;
                 }
             }
         }
@@ -154,7 +156,7 @@ fn run_app(conn: Connection, conf: Configuration) -> Result<()> {
             if Password::parse_str(p).is_ok() && PASSWORD_COMMANDS.contains(&cmd.as_str()) =>
         {
             trace!("Got command {} from {}", cmd.as_str(), &envelope.from()[0]);
-            let p = Password::parse_str(p).unwrap();
+            let p = Password::parse_str(p)?;
             match cmd.as_str() {
                 "reply" => {
                     info!(
@@ -182,7 +184,7 @@ fn run_app(conn: Connection, conf: Configuration) -> Result<()> {
                                 is_subscribed,
                                 &conf,
                             ));
-                            send_mail(reply, &conf);
+                            send_mail(reply, &conf)?;
                         }
                         Err(err) => {
                             error!(
@@ -197,7 +199,7 @@ fn run_app(conn: Connection, conf: Configuration) -> Result<()> {
                                     ),
                                 );
                             reply.set_body(templates::new_reply_failure(err, &conf));
-                            send_mail(reply, &conf);
+                            send_mail(reply, &conf)?;
                         }
                     }
                 }
@@ -212,7 +214,7 @@ fn run_app(conn: Connection, conf: Configuration) -> Result<()> {
                             ),
                         );
                         reply.set_body(templates::close_success(title, issue_id, &conf));
-                        send_mail(reply, &conf);
+                        send_mail(reply, &conf)?;
                     }
                     Err(e) => {
                         reply.headers_mut().insert(
@@ -220,7 +222,7 @@ fn run_app(conn: Connection, conf: Configuration) -> Result<()> {
                             format!("[{tag}] issue could not be closed", tag = &conf.tag,),
                         );
                         reply.set_body(templates::close_failure(e, &conf));
-                        send_mail(reply, &conf);
+                        send_mail(reply, &conf)?;
                     }
                 },
                 "unsubscribe" => match api::change_subscription(&conn, p, false) {
@@ -236,7 +238,7 @@ fn run_app(conn: Connection, conf: Configuration) -> Result<()> {
                         reply.set_body(templates::change_subscription_success(
                             title, p, issue_id, false, &conf,
                         ));
-                        send_mail(reply, &conf);
+                        send_mail(reply, &conf)?;
                     }
                     Err(e) => {
                         error!("unsubscribe error: {}", e.to_string());
@@ -245,7 +247,7 @@ fn run_app(conn: Connection, conf: Configuration) -> Result<()> {
                             format!("[{tag}] could not unsubscribe", tag = &conf.tag,),
                         );
                         reply.set_body(templates::change_subscription_failure(false, &conf));
-                        send_mail(reply, &conf);
+                        send_mail(reply, &conf)?;
                     }
                 },
                 "subscribe" => match api::change_subscription(&conn, p, true) {
@@ -261,7 +263,7 @@ fn run_app(conn: Connection, conf: Configuration) -> Result<()> {
                         reply.set_body(templates::change_subscription_success(
                             title, p, issue_id, true, &conf,
                         ));
-                        send_mail(reply, &conf);
+                        send_mail(reply, &conf)?;
                     }
                     Err(e) => {
                         error!("subscribe error: {}", e.to_string());
@@ -270,7 +272,7 @@ fn run_app(conn: Connection, conf: Configuration) -> Result<()> {
                             format!("[{tag}] could not subscribe", tag = &conf.tag,),
                         );
                         reply.set_body(templates::change_subscription_failure(true, &conf));
-                        send_mail(reply, &conf);
+                        send_mail(reply, &conf)?;
                     }
                 },
 
@@ -280,7 +282,7 @@ fn run_app(conn: Connection, conf: Configuration) -> Result<()> {
                         format!("[{tag}] invalid action: `{}`", &other, tag = &conf.tag),
                     );
                     reply.set_body(templates::invalid_request(&conf));
-                    send_mail(reply, &conf);
+                    send_mail(reply, &conf)?;
                 }
             }
         }
@@ -290,41 +292,38 @@ fn run_app(conn: Connection, conf: Configuration) -> Result<()> {
                 format!("[{tag}] invalid request", tag = &conf.tag),
             );
             reply.set_body(templates::invalid_request(&conf));
-            send_mail(reply, &conf);
+            send_mail(reply, &conf)?;
             error!("invalid request: {:?}", other);
         }
     }
     Ok(())
 }
 
-fn main() -> Result<()> {
+fn run_app() -> Result<()> {
     let mut file = std::fs::File::open("./config.toml")?;
     let args = std::env::args().skip(1).collect::<Vec<String>>();
     let perform_cron: bool;
     if args.len() > 1 {
-        eprintln!("Too many arguments.");
-        std::process::exit(1);
-    } else if args == &["cron"] {
+        return Err(Error::new("Too many arguments."));
+    } else if args == ["cron"] {
         perform_cron = true;
     } else if args.is_empty() {
         perform_cron = false;
     } else {
-        eprintln!("Usage: issue_bot [cron]");
-        std::process::exit(1);
+        return Err(Error::new("Usage: issue_bot [cron]"));
     }
 
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
-    let conf: Configuration = toml::from_str(&contents).unwrap();
+    let conf: Configuration = toml::from_str(&contents)?;
     CombinedLogger::init(vec![
         TermLogger::new(LevelFilter::Error, Config::default(), TerminalMode::Mixed),
         WriteLogger::new(
             LevelFilter::Trace,
             Config::default(),
-            File::create(&conf.log_file).unwrap(),
+            File::create(&conf.log_file)?,
         ),
-    ])
-    .unwrap();
+    ])?;
 
     /* - read mail from stdin
      * - decide which case this mail falls to
@@ -341,7 +340,7 @@ fn main() -> Result<()> {
      *
      */
     let db_path = "./sqlite3.db";
-    let conn = Connection::open(db_path).unwrap();
+    let conn = Connection::open(db_path)?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS issue (
@@ -354,9 +353,8 @@ fn main() -> Result<()> {
                   title           TEXT NOT NULL,
                   last_update     TEXT
                   )",
-        NO_PARAMS,
-    )
-    .unwrap();
+        [],
+    )?;
 
     if perform_cron {
         info!("Performing cron duties.");
@@ -367,9 +365,16 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    if let Err(err) = run_app(conn, conf) {
+    if let Err(err) = run_request(conn, conf) {
         error!("Encountered an error: {}", &err);
         return Err(err);
     }
     Ok(())
+}
+
+fn main() {
+    if let Err(err) = run_app() {
+        eprintln!("{}", err);
+        std::process::exit(1);
+    }
 }

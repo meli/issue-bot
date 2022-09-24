@@ -22,6 +22,10 @@ error_chain! {
         Unicode(std::str::Utf8Error);
         UnicodeS(std::string::FromUtf8Error);
         Email(melib::error::MeliError);
+        Api(serde_json::Error);
+        Conf(toml::de::Error);
+        Logger(log::SetLoggerError);
+        Password(uuid::Error);
    }
 }
 

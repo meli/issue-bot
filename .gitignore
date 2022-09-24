@@ -1,2 +1,7 @@
 /target
 **/*.rs.bk
+.*.swp
+*.swp
+config.toml
+issue-bot.log
+sqlite3.db

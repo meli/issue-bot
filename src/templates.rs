@@ -16,14 +16,14 @@
 
 use super::*;
 
-static BASE_ISSUE_URL: &'static str = "{base_url}/{repo}/issues";
+static BASE_ISSUE_URL: &str = "{base_url}/{repo}/issues";
 
 pub fn new_issue_failure(e: Error, conf: &Configuration) -> String {
     format!("Hello,
 
 Unfortunately we were not able to create your issue. The reason was: `{}`. Please contact the repository's owners for assistance.
 
-This is an automated email from {bot_name} <{local_part}+help@{domain}>",  e.to_string(), local_part = &conf.local_part, domain = &conf.domain, bot_name = &conf.bot_name)
+This is an automated email from {bot_name} <{local_part}+help@{domain}>",  e, local_part = &conf.local_part, domain = &conf.domain, bot_name = &conf.bot_name)
 }
 
 pub fn new_issue_success(
@@ -46,7 +46,7 @@ To close the issue, send an email to {local_part}+{password}+close@{domain}.
 
 Please keep this email in order to be able to keep in touch with your issue.
 
-This is an automated email from {bot_name} <{local_part}+help@{domain}>", title = title, password = password.to_string(), issue_id = issue_id, url = BASE_ISSUE_URL.replace("{base_url}", &conf.base_url).replace("{repo}", &conf.repo), local_part = &conf.local_part, domain = &conf.domain, bot_name = &conf.bot_name)
+This is an automated email from {bot_name} <{local_part}+help@{domain}>", title = title, password = password, issue_id = issue_id, url = BASE_ISSUE_URL.replace("{base_url}", &conf.base_url).replace("{repo}", &conf.repo), local_part = &conf.local_part, domain = &conf.domain, bot_name = &conf.bot_name)
 }
 
 pub fn new_reply_failure(e: Error, conf: &Configuration) -> String {
@@ -54,7 +54,7 @@ pub fn new_reply_failure(e: Error, conf: &Configuration) -> String {
 
 Unfortunately we were not able to post your reply. The reason was: `{}`. Please contact the repository's owners for assistance.
 
-This is an automated email from {bot_name} <{local_part}+help@{domain}>",  e.to_string(), local_part = &conf.local_part, domain = &conf.domain, bot_name = &conf.bot_name)
+This is an automated email from {bot_name} <{local_part}+help@{domain}>",  e, local_part = &conf.local_part, domain = &conf.domain, bot_name = &conf.bot_name)
 }
 
 pub fn new_reply_success(
@@ -79,7 +79,7 @@ To close the issue, send an email to {local_part}+{password}+close@{domain}.
 
 Please keep this email in order to be able to keep in touch with your issue.
 
-This is an automated email from {bot_name} <{local_part}+help@{domain}>", title = title, password = password.to_string(), issue_id = issue_id, url = BASE_ISSUE_URL.replace("{base_url}", &conf.base_url).replace("{repo}", &conf.repo), local_part = &conf.local_part, domain = &conf.domain, bot_name = &conf.bot_name)
+This is an automated email from {bot_name} <{local_part}+help@{domain}>", title = title, password = password, issue_id = issue_id, url = BASE_ISSUE_URL.replace("{base_url}", &conf.base_url).replace("{repo}", &conf.repo), local_part = &conf.local_part, domain = &conf.domain, bot_name = &conf.bot_name)
     } else {
         format!("Hello,
 
@@ -95,7 +95,7 @@ To close the issue, send an email to {local_part}+{password}+close@{domain}.
 
 Please keep this email in order to be able to keep in touch with your issue.
 
-This is an automated email from {bot_name} <{local_part}+help@{domain}>", title = title, password = password.to_string(), issue_id = issue_id, url = BASE_ISSUE_URL.replace("{base_url}", &conf.base_url).replace("{repo}", &conf.repo), local_part = &conf.local_part, domain = &conf.domain, bot_name = &conf.bot_name)
+This is an automated email from {bot_name} <{local_part}+help@{domain}>", title = title, password = password, issue_id = issue_id, url = BASE_ISSUE_URL.replace("{base_url}", &conf.base_url).replace("{repo}", &conf.repo), local_part = &conf.local_part, domain = &conf.domain, bot_name = &conf.bot_name)
     }
 }
 
@@ -124,7 +124,7 @@ pub fn close_failure(e: Error, conf: &Configuration) -> String {
 
 Unfortunately we were not able to close this issue. The reason was: `{}`. Please contact the repository's owners for assistance.
 
-This is an automated email from {bot_name} <{local_part}+help@{domain}>",  e.to_string(), local_part = &conf.local_part, domain = &conf.domain, bot_name = &conf.bot_name)
+This is an automated email from {bot_name} <{local_part}+help@{domain}>",  e, local_part = &conf.local_part, domain = &conf.domain, bot_name = &conf.bot_name)
 }
 
 pub fn invalid_request(conf: &Configuration) -> String {
@@ -170,7 +170,7 @@ To close the issue, send an email to {local_part}+{password}+close@{domain}.
 
 Please keep this email in order to be able to keep in touch with your issue.
 
-This is an automated email from {bot_name} <{local_part}+help@{domain}>", title = title, password = password.to_string(), issue_id = issue_id, url = BASE_ISSUE_URL.replace("{base_url}", &conf.base_url).replace("{repo}", &conf.repo), local_part = &conf.local_part, domain = &conf.domain, bot_name = &conf.bot_name, not = if is_subscribed { "" }else {"not "}, un = if is_subscribed { "un" } else { "" } )
+This is an automated email from {bot_name} <{local_part}+help@{domain}>", title = title, password = password, issue_id = issue_id, url = BASE_ISSUE_URL.replace("{base_url}", &conf.base_url).replace("{repo}", &conf.repo), local_part = &conf.local_part, domain = &conf.domain, bot_name = &conf.bot_name, not = if is_subscribed { "" }else {"not "}, un = if is_subscribed { "un" } else { "" } )
 }
 
 pub fn change_subscription_failure(is_subscribed: bool, conf: &Configuration) -> String {
@@ -188,7 +188,7 @@ This is an automated email from {bot_name} <{local_part}+help@{domain}>",
 }
 
 pub fn reply_update(issue: &Issue, conf: &Configuration, comments: Vec<String>) -> String {
-    assert!(comments.len() > 0);
+    assert!(!comments.is_empty());
     format!(
         "Hello,
 
