@@ -1,0 +1,29 @@
+[Unit]
+Description=issue-bot crons
+RefuseManualStart=no  # Allow manual starts
+RefuseManualStop=no   # Allow manual stops
+
+[Timer]
+#Execute job if it missed a run due to machine being off
+Persistent=true
+#Run 120 seconds after boot for the first time
+OnBootSec=120
+#Run every 5 minutes thereafter
+OnUnitActiveSec=300
+#File describing job to execute
+Unit=issue-bot.service
+
+
+## more complicated examples:
+# # run on the minute of every minute every hour of every day
+#  OnCalendar=*-*-* *:*:00
+# # run on the hour of every hour of every day
+#  OnCalendar=*-*-* *:00:00
+# # run every day
+#  OnCalendar=*-*-* 00:00:00
+# # run 11:12:13 of the first or fifth day of any month of the year
+# # 2012, but only if that day is a Thursday or Friday
+#  OnCalendar=Thu,Fri 2012-*-1,5 11:12:13
+
+[Install]
+WantedBy=timers.target

@@ -122,15 +122,13 @@ pub fn check(conn: Connection, conf: Configuration) -> Result<()> {
     for issue in results {
         errors.push(check_issue(&conn, &conf, issue));
     }
-    if errors.iter().any(|r| matches!(r, Ok(true))) {
-        let successes_count = errors.iter().filter(|r| matches!(r, Ok(true))).count();
-        let error_count = errors.iter().filter(|r| r.is_err()).count();
-        log::info!(
-            "Cron run with {} updates and {} errors.",
-            successes_count,
-            error_count
-        );
-    }
+    let successes_count = errors.iter().filter(|r| matches!(r, Ok(true))).count();
+    let error_count = errors.iter().filter(|r| r.is_err()).count();
+    log::info!(
+        "Cron run with {} updates and {} errors.",
+        successes_count,
+        error_count
+    );
     _ = errors.into_iter().collect::<Result<Vec<bool>>>()?;
     Ok(())
 }

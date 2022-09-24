@@ -300,7 +300,9 @@ fn run_request(conn: Connection, conf: Configuration) -> Result<()> {
 }
 
 fn run_app() -> Result<()> {
-    let mut file = std::fs::File::open("./config.toml")?;
+    let conf_path =
+        std::env::var("ISSUE_BOT_CONFIG").unwrap_or_else(|_| "./config.toml".to_string());
+    let mut file = std::fs::File::open(&conf_path)?;
     let args = std::env::args().skip(1).collect::<Vec<String>>();
     let perform_cron: bool;
     if args.len() > 1 {
@@ -339,11 +341,11 @@ fn run_app() -> Result<()> {
      *
      *
      */
-    let db_path = "./sqlite3.db";
-    let conn = Connection::open(db_path)?;
+    let db_path = std::env::var("ISSUE_BOT_DB").unwrap_or_else(|_| "./sqlite3.db".to_string());
+    let conn = Connection::open(&db_path)?;
 
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS issue (
+    conn.execute_batch(
+        r##"CREATE TABLE IF NOT EXISTS issue (
                   id              INTEGER PRIMARY KEY,
                   submitter       TEXT NOT NULL,
                   password        BLOB,
@@ -352,8 +354,10 @@ fn run_app() -> Result<()> {
                   subscribed      BOOLEAN,
                   title           TEXT NOT NULL,
                   last_update     TEXT
-                  )",
-        [],
+                  );
+
+        UPDATE issue SET last_update = replace(last_update, '"', '');
+        "##,
     )?;
 
     if perform_cron {

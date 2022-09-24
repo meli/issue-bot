@@ -1,0 +1,14 @@
+[Unit]
+Description=issue-bot cron
+RefuseManualStart=no  # Allow manual starts
+RefuseManualStop=no   # Allow manual stops
+
+[Service]
+Type=simple
+ExecStart=/path/to/issue-bot cron
+Environment=ISSUE_BOT_CONFIG=/a/b/c/d.toml
+Environment=ISSUE_BOT_DB=/a/b/c/sqlite3.db
+
+
+[Install]
+WantedBy=default.target
